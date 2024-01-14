@@ -14,8 +14,11 @@
     "dependencies": {
         "@ffmpeg-installer/ffmpeg": "^1.1.0",
         "@google-cloud/text-to-speech": "^3.4.0",
+        "assemblyai": "^4.2.0",
+        "axios": "^1.6.5",
         "dotenv": "^16.3.1",
         "fluent-ffmpeg": "^2.1.2",
+        "fs-extra": "^11.2.0",
         "music-metadata": "^7.14.0",
         "openai": "^4.24.5"
     },

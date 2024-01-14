@@ -1,7 +1,8 @@
 'use strict';
 
 const fs = require('fs');
-const util = require('util');
+const fs_extra = require('fs-extra');
+const axios = require('axios');
 const OpenAI = require("openai");
 const textToSpeech = require('@google-cloud/text-to-speech');
 require('dotenv').config();
@@ -86,8 +87,11 @@ async function generateVideo() {
     const audio_clip = './generated/speech.mp3';
     const audio_length = await mm.parseFile(audio_clip);
 
+    // generate subtitles 
+    await transcribeAudio(audio_clip);
+
     // Video editing using ffmpeg-fluent
-    ffmpeg(`./logic/gameplay/gameplay_1.mp4`)
+    ffmpeg(`./logic/gameplay/gameplay_2.mp4`)
         .setStartTime(start_point)
         .duration(audio_length.format.duration)
         .addInput(audio_clip)
@@ -102,6 +106,59 @@ async function generateVideo() {
         .on('end', () => {
             console.log('Video has been created.');
         });
+}
+
+async function transcribeAudio(audio_clip) {
+    const baseUrl = 'https://api.assemblyai.com/v2';
+
+    const headers = {
+    authorization: process.env.ASSEMBLYAI_API 
+    };
+
+    const audioData = await fs_extra.readFile(audio_clip);
+    const uploadResponse = await axios.post(`${baseUrl}/upload`, audioData, { headers });
+    const uploadUrl = uploadResponse.data.upload_url;
+
+    const data = {
+        audio_url: uploadUrl
+    };
+    const url = `${baseUrl}/transcript`;
+    const response = await axios.post(url, data, { headers: headers }); 
+
+    const transcriptId = response.data.id;
+    const pollingEndpoint = `${baseUrl}/transcript/${transcriptId}`;
+
+    while (true) {
+        const pollingResponse = await axios.get(pollingEndpoint, {
+            headers: headers
+        });
+        const transcriptionResult = pollingResponse.data;
+
+        if (transcriptionResult.status === 'completed') {
+            break;
+        } else if (transcriptionResult.status === 'error') {
+            throw new Error(`Transcription failed: ${transcriptionResult.error}`);
+        } else {
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
+    }
+
+    const subtitles = await getSubtitleFile(transcriptId, headers);
+    await fs_extra.writeFile('./generated/subtitles.srt', subtitles);
+}
+
+async function getSubtitleFile(transcriptId, headers) {
+    const url = `https://api.assemblyai.com/v2/transcript/${transcriptId}/srt`
+  
+    try {
+      const response = await axios.get(url, { headers })
+      return response.data
+    } catch (error) {
+      throw new Error(
+        `Failed to retrieve ${'srt'.toUpperCase()} file: ${error.response
+          ?.status} ${error.response?.data?.error}`
+      )
+    }
 }
 
 generateVideo().then(() => {
