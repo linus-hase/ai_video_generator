@@ -20,7 +20,8 @@
         "fluent-ffmpeg": "^2.1.2",
         "fs-extra": "^11.2.0",
         "music-metadata": "^7.14.0",
-        "openai": "^4.24.5"
+        "openai": "^4.24.5",
+        "snoowrap": "^1.23.0"
     },
     "devDependencies": {
         "nodemon": "^3.0.1"

@@ -11,6 +11,7 @@ const ffmpeg = require('fluent-ffmpeg');
 ffmpeg.setFfmpegPath(ffmpegPath);
 const readline = require('readline');
 const mm = require('music-metadata');
+const snoowrap = require('snoowrap');
 
 let videoTitle = "Lorem Ipsum";
 
@@ -35,9 +36,8 @@ async function getVideoContent() {
                     rl.question("\nEnter the theme of the video > ", async (theme) => {
                         const response = await openai.chat.completions.create({
                             model:"gpt-3.5-turbo-1106",
-                            response_format:{ "type": "json_object" },
                             messages:[
-                                {"role": "system", "content": "You are a helpful assistant designed to output JSON."},
+                                {"role": "system", "content": "You are a helpful assistant."},
                                 {"role": "user", "content": theme}
                             ],
                     });
@@ -69,7 +69,7 @@ async function generateVideo() {
     if (!fs.existsSync('generated')) {
         fs.mkdirSync('generated');
     }
-
+    
     // Generate speech (Using Google Cloud Text-to-Speech API)
     const request = {
         input: { text: content },
@@ -102,6 +102,7 @@ async function generateVideo() {
         ])
         .audioCodec('aac')
         .videoCodec('libx264')
+        .outputOptions("-vf ass=./generated/subtitles.ass:fontsdir=./fonts/")
         .save(`generated/${videoTitle}.mp4`)
         .on('end', () => {
             console.log('Video has been created.');
@@ -112,7 +113,7 @@ async function transcribeAudio(audio_clip) {
     const baseUrl = 'https://api.assemblyai.com/v2';
 
     const headers = {
-    authorization: process.env.ASSEMBLYAI_API 
+        authorization: process.env.ASSEMBLYAI_API 
     };
 
     const audioData = await fs_extra.readFile(audio_clip);
@@ -148,7 +149,7 @@ async function transcribeAudio(audio_clip) {
 }
 
 async function getSubtitleFile(transcriptId, headers) {
-    const url = `https://api.assemblyai.com/v2/transcript/${transcriptId}/srt`
+    const url = `https://api.assemblyai.com/v2/transcript/${transcriptId}/srt?chars_per_caption=12`
   
     try {
       const response = await axios.get(url, { headers })
@@ -159,6 +160,25 @@ async function getSubtitleFile(transcriptId, headers) {
           ?.status} ${error.response?.data?.error}`
       )
     }
+}
+
+function addLineBreaksToASS(assFilePath) {
+    const content = fs.readFileSync(assFilePath, 'utf8');
+    const lines = content.split('\n');
+    const modifiedLines = lines.map(line => {
+        if (line.startsWith('Dialogue:')) {
+            // Split the line into components and then process the text part
+            let parts = line.split(',');
+            let textPart = parts.slice(9).join(','); // Join back the text part in case it contains commas
+            let modifiedText = textPart.split(' ').join(' \\N');
+            parts[9] = modifiedText; // Replace the text part with modified text
+            return parts.join(',');
+        } else {
+            return line;
+        }
+    });
+    const modifiedContent = modifiedLines.join('\n');
+    fs.writeFileSync(assFilePath, modifiedContent, 'utf8');
 }
 
 generateVideo().then(() => {
