@@ -70,16 +70,16 @@ async function generateVideo() {
         fs.mkdirSync('generated');
     }
     
-    // Generate speech (Using Google Cloud Text-to-Speech API)
-    const request = {
-        input: { text: content },
-        voice: { languageCode: 'en-US', ssmlGender: 'NEUTRAL' },
-        audioConfig: { audioEncoding: 'MP3' },
-    };
+    // // Generate speech (Using Google Cloud Text-to-Speech API)
+    // const request = {
+    //     input: { text: content },
+    //     voice: { languageCode: 'en-US', ssmlGender: 'NEUTRAL' },
+    //     audioConfig: { audioEncoding: 'MP3' },
+    // };
 
-    const [response] = await textToSpeechClient.synthesizeSpeech(request);
-    fs.writeFileSync('generated/speech.mp3', response.audioContent, 'binary');
-    console.log('Speech saved to generated/speech.mp3');
+    // const [response] = await textToSpeechClient.synthesizeSpeech(request);
+    // fs.writeFileSync('generated/speech.mp3', response.audioContent, 'binary');
+    // console.log('Speech saved to generated/speech.mp3');
 
     // Randomly select gameplay footage
     const gp = Math.floor(Math.random() * 2) + 1;
@@ -89,24 +89,32 @@ async function generateVideo() {
 
     // generate subtitles 
     await transcribeAudio(audio_clip);
+    ffmpeg()
+        .input('./generated/subtitles.srt')
+        .output('./generated/subtitles.ass')
+        .save('./generated/subtitles.ass');
+    
+    setTimeout(() =>{
+        addLineBreaksToASS('./generated/subtitles.ass');
 
-    // Video editing using ffmpeg-fluent
-    ffmpeg(`./logic/gameplay/gameplay_2.mp4`)
-        .setStartTime(start_point)
-        .duration(audio_length.format.duration)
-        .addInput(audio_clip)
-        .complexFilter([
-            {
-            filter : 'amix', options: { inputs : 2, duration : 'longest' }
-            }
-        ])
-        .audioCodec('aac')
-        .videoCodec('libx264')
-        .outputOptions("-vf ass=./generated/subtitles.ass:fontsdir=./fonts/")
-        .save(`generated/${videoTitle}.mp4`)
-        .on('end', () => {
-            console.log('Video has been created.');
-        });
+        // Video editing using ffmpeg-fluent
+        ffmpeg(`./logic/gameplay/gameplay_${gp}.mp4`)
+            .setStartTime(start_point)
+            .duration(audio_length.format.duration)
+            .addInput(audio_clip)
+            .complexFilter([
+                {
+                filter : 'amix', options: { inputs : 2, duration : 'longest' }
+                }
+            ])
+            .audioCodec('aac')
+            .videoCodec('libx264')
+            .outputOptions("-vf ass=./generated/subtitles.ass:fontsdir=./fonts/")
+            .save(`generated/${videoTitle}.mp4`)
+            .on('end', () => {
+                console.log('Video has been created.');
+            });
+    }, 10000);
 }
 
 async function transcribeAudio(audio_clip) {
@@ -163,6 +171,7 @@ async function getSubtitleFile(transcriptId, headers) {
 }
 
 function addLineBreaksToASS(assFilePath) {
+    // wait on .ass transcription
     const content = fs.readFileSync(assFilePath, 'utf8');
     const lines = content.split('\n');
     const modifiedLines = lines.map(line => {
@@ -179,6 +188,17 @@ function addLineBreaksToASS(assFilePath) {
     });
     const modifiedContent = modifiedLines.join('\n');
     fs.writeFileSync(assFilePath, modifiedContent, 'utf8');
+}
+
+const r = new snoowrap({
+    userAgent: true,
+    clientId: process.env.REDDIT_CLIENT_ID,
+    clientSecret: process.env.REDDIT_CLIENT_SECRET,
+    refreshToken: process.env.SNOOWRAP_REFRESH_TOKEN
+});
+
+async function getRedditPosts() {
+    r.getTop('Stories', {time: 'week', limit: 1}).then(console.log);
 }
 
 generateVideo().then(() => {
