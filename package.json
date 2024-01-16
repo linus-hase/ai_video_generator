@@ -19,6 +19,7 @@
         "dotenv": "^16.3.1",
         "fluent-ffmpeg": "^2.1.2",
         "fs-extra": "^11.2.0",
+        "jimp": "^0.22.10",
         "music-metadata": "^7.14.0",
         "openai": "^4.24.5",
         "snoowrap": "^1.23.0"

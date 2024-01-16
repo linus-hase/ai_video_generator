@@ -1,5 +1,7 @@
 'use strict';
 
+const { createThumbnail } = require('./thumbnail/thumbnail.js');
+
 const fs = require('fs');
 const fs_extra = require('fs-extra');
 const axios = require('axios');
@@ -28,32 +30,36 @@ const openai = new OpenAI({
 const textToSpeechClient = new textToSpeech.TextToSpeechClient();
 
 async function getVideoContent() {
+    const story = await getRedditPosts();
     return new Promise((resolve) => {
         rl.question("\nEnter the name of the video > ", (title) => {
             videoTitle = title;
-            rl.question('Do you want AI to generate content? (yes/no) > ', (option) => {
+            rl.question('Do you want AI to generate content? (yes/no) > ', async (option) => {
                 if (option === 'yes') {
-                    rl.question("\nEnter the theme of the video > ", async (theme) => {
+                    // rl.question("\nEnter the theme of the video > ", async (theme) => {
                         const response = await openai.chat.completions.create({
                             model:"gpt-3.5-turbo-1106",
                             messages:[
                                 {"role": "system", "content": "You are a helpful assistant."},
-                                {"role": "user", "content": theme}
+                                {"role": "user", "content": story[1]+ "\n" + "Rewrite this story as a makeover. It shouldn't sound like the original but is still written in the same narrative perspective and have about the same length and, MOST IMPORTANTLY, the transported emotions. The output should only contain the story and not any additional comments made before, in or behind the original. Please also change names of characters."}
                             ],
-                    });
+                        });
 
-                    console.log(response.choices[0].message.content);
+                        console.log(response.choices[0].message.content);
 
                         rl.question('\nIs this fine? (yes/no) > ', (yesNo) => {
                             if (yesNo === 'yes') {
-                                resolve(response.choices[0].message.content);
+                                const responseArr = []
+                                responseArr.push(story[0])
+                                responseArr.push(response.choices[0].message.content);
+                                resolve(responseArr);
                             } else {
                                 rl.question('\nEnter > ', (content) => {
                                     resolve(content);
                                 });
                             }
                         });
-                    });
+                    // });
                 } else {
                     rl.question('\nEnter the content of the video > ', (content) => {
                         resolve(content);
@@ -66,10 +72,12 @@ async function getVideoContent() {
 
 async function generateVideo() {
     const content = await getVideoContent();
+    console.log(content[0]);
     if (!fs.existsSync('generated')) {
         fs.mkdirSync('generated');
     }
-    
+    // await getRedditPosts();
+
     // // Generate speech (Using Google Cloud Text-to-Speech API)
     // const request = {
     //     input: { text: content },
@@ -82,13 +90,14 @@ async function generateVideo() {
     // console.log('Speech saved to generated/speech.mp3');
 
     // Randomly select gameplay footage
-    const gp = Math.floor(Math.random() * 2) + 1;
+    const gp = Math.floor(Math.random() * 3) + 1;
     const start_point = Math.floor(Math.random() * 480);
     const audio_clip = './generated/speech.mp3';
     const audio_length = await mm.parseFile(audio_clip);
 
     // generate subtitles 
-    await transcribeAudio(audio_clip);
+    // await transcribeAudio(audio_clip);
+
     ffmpeg()
         .input('./generated/subtitles.srt')
         .output('./generated/subtitles.ass')
@@ -98,7 +107,7 @@ async function generateVideo() {
         addLineBreaksToASS('./generated/subtitles.ass');
 
         // Video editing using ffmpeg-fluent
-        ffmpeg(`./logic/gameplay/gameplay_${gp}.mp4`)
+        ffmpeg(`./logic/gameplay/gameplay_4.mp4`)
             .setStartTime(start_point)
             .duration(audio_length.format.duration)
             .addInput(audio_clip)
@@ -113,6 +122,17 @@ async function generateVideo() {
             .save(`generated/${videoTitle}.mp4`)
             .on('end', () => {
                 console.log('Video has been created.');
+                ffmpeg('./generated/run.mp4')
+                .input('./reddit_comment.png')
+                .complexFilter([
+                    `[0:v][1:v] overlay=x=0:y=0:enable='between(t,0,${findDuration('./generated/subtitles.srt', 'potential')})'`
+                ])
+                .save('output.mp4')
+                .on('end', () => {
+                    console.log('Processing finished!');
+                }).on('error', (err) => {
+                    console.error('Error:', err);
+                });
             });
     }, 10000);
 }
@@ -170,6 +190,43 @@ async function getSubtitleFile(transcriptId, headers) {
     }
 }
 
+function findDuration(srtPath, searchWord) {
+    const srt = fs.readFileSync(srtPath, 'utf8');
+    let lines = srt.split('\n');
+
+    for (let i = 0; i < lines.length; i++) {
+        // Check if the line is a subtitle text
+        if (isNaN(parseInt(lines[i])) && !lines[i].includes('-->')) {
+            if (lines[i].toLowerCase().includes(searchWord.toLowerCase())) {
+                // Find the timestamp line which is two lines above the subtitle text
+                let timestampLine = lines[i - 1];
+                return timestampLine.split(' --> ')[1].split(':')[2].split(',')[0];
+            }
+        }
+    }
+    return null;
+}
+
+function overlayImageOnVideo(imagePath, videoPath, outputPath, duration) {
+    ffmpeg(videoPath)
+        .input(imagePath)
+        .complexFilter([
+            `[0:v][1:v] overlay=shortest=1:enable='between(t,0,${duration})' [out]`
+        ])
+        .outputOptions([
+            `-map [out]`,
+            `-map 0:a?`
+        ])
+        .on('end', function() {
+            console.log('Processing finished !');
+        })
+        .on('error', function(err) {
+            console.log('Error: ' + err.message);
+        })
+        .save(outputPath);
+}
+
+
 function addLineBreaksToASS(assFilePath) {
     // wait on .ass transcription
     const content = fs.readFileSync(assFilePath, 'utf8');
@@ -182,6 +239,8 @@ function addLineBreaksToASS(assFilePath) {
             let modifiedText = textPart.split(' ').join(' \\N');
             parts[9] = modifiedText; // Replace the text part with modified text
             return parts.join(',');
+        } else if (line.startsWith('Style:')) {
+            return 'Style: Default,Borsok,25,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,1.5,2,5,10,10,10,1';
         } else {
             return line;
         }
@@ -198,7 +257,14 @@ const r = new snoowrap({
 });
 
 async function getRedditPosts() {
-    r.getTop('Stories', {time: 'week', limit: 1}).then(console.log);
+    let story = [];
+    story = await r.getTop('Stories', {time: 'week', limit: 1}).then(data => {
+        const story = [];
+        story.push(data[0].title);
+        story.push(data[0].selftext);
+        return story;
+    });
+    return story;
 }
 
 generateVideo().then(() => {
