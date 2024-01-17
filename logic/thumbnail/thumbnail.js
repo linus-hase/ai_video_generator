@@ -47,7 +47,8 @@ async function createThumbnail(text, inputPath) {
     await image.writeAsync(tempImagePath);
 }
 
-createThumbnail('Titel wird hier eingesetzt!', './logic/thumbnail/sources/reddit_comment_template.png');
+const gp = Math.floor(Math.random() * 8) + 1;
+createThumbnail('Titel wird hier eingesetzt!', `./logic/thumbnail/sources/reddit_comment_template_${gp}.png`);
 
 module.exports = {
     createThumbnail

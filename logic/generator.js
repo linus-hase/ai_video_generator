@@ -1,6 +1,7 @@
 'use strict';
 
 const { createThumbnail } = require('./thumbnail/thumbnail.js');
+const { splitVideoIntoParts, deleteLines } = require('./utils.js');
 
 const fs = require('fs');
 const fs_extra = require('fs-extra');
@@ -98,6 +99,9 @@ async function generateVideo() {
     // generate subtitles 
     // await transcribeAudio(audio_clip);
 
+    const thumbnailDuration = findDuration('./generated/subtitles.srt', 'potential');
+    deleteLines('./generated/subtitles.srt', 'potential');
+
     ffmpeg()
         .input('./generated/subtitles.srt')
         .output('./generated/subtitles.ass')
@@ -125,11 +129,12 @@ async function generateVideo() {
                 ffmpeg('./generated/run.mp4')
                 .input('./reddit_comment.png')
                 .complexFilter([
-                    `[0:v][1:v] overlay=x=0:y=0:enable='between(t,0,${findDuration('./generated/subtitles.srt', 'potential')})'`
+                    `[0:v][1:v] overlay=x=0:y=0:enable='between(t,0,${thumbnailDuration})'`
                 ])
                 .save('output.mp4')
                 .on('end', () => {
                     console.log('Processing finished!');
+                    splitVideoIntoParts('./output.mp4');
                 }).on('error', (err) => {
                     console.error('Error:', err);
                 });
@@ -206,26 +211,6 @@ function findDuration(srtPath, searchWord) {
     }
     return null;
 }
-
-function overlayImageOnVideo(imagePath, videoPath, outputPath, duration) {
-    ffmpeg(videoPath)
-        .input(imagePath)
-        .complexFilter([
-            `[0:v][1:v] overlay=shortest=1:enable='between(t,0,${duration})' [out]`
-        ])
-        .outputOptions([
-            `-map [out]`,
-            `-map 0:a?`
-        ])
-        .on('end', function() {
-            console.log('Processing finished !');
-        })
-        .on('error', function(err) {
-            console.log('Error: ' + err.message);
-        })
-        .save(outputPath);
-}
-
 
 function addLineBreaksToASS(assFilePath) {
     // wait on .ass transcription
