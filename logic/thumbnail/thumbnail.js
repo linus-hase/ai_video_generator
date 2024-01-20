@@ -2,7 +2,7 @@
 
 const Jimp = require('jimp');
 
-async function createThumbnail(text, inputPath) {
+async function createThumbnail(text, inputPath, outputPath) {
     const image = await Jimp.read(inputPath);
 
     const font = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
@@ -26,7 +26,7 @@ async function createThumbnail(text, inputPath) {
         return lines;
     }
 
-    const maxWidth = image.bitmap.width - 300; // Adjust margin as needed
+    const maxWidth = image.bitmap.width - 250; // Adjust margin as needed
     const wrappedText = wrapText(image, text, maxWidth);
 
     let textHeight = 0;
@@ -43,12 +43,8 @@ async function createThumbnail(text, inputPath) {
         y += Jimp.measureTextHeight(font, line, maxWidth);
     });
 
-    const tempImagePath = './reddit_comment.png';
-    await image.writeAsync(tempImagePath);
+    await image.writeAsync(outputPath);
 }
-
-const gp = Math.floor(Math.random() * 8) + 1;
-createThumbnail('Titel wird hier eingesetzt!', `./logic/thumbnail/sources/reddit_comment_template_${gp}.png`);
 
 module.exports = {
     createThumbnail

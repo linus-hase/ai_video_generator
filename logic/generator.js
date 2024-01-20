@@ -1,7 +1,8 @@
 'use strict';
 
 const { createThumbnail } = require('./thumbnail/thumbnail.js');
-const { splitVideoIntoParts, deleteLines } = require('./utils.js');
+const { splitVideoIntoParts, deleteLines, createTitle } = require('./utils.js');
+const { authorize, uploadVideo } = require('./youtube.js');
 
 const fs = require('fs');
 const fs_extra = require('fs-extra');
@@ -74,10 +75,14 @@ async function getVideoContent() {
 async function generateVideo() {
     const content = await getVideoContent();
     console.log(content[0]);
+    const title = content[0];
+    const story = content[1];
     if (!fs.existsSync('generated')) {
         fs.mkdirSync('generated');
     }
-    // await getRedditPosts();
+
+    const tn_nr = Math.floor(Math.random() * 8) + 1;
+    await createThumbnail(title, `./logic/thumbnail/sources/reddit_comment_template_${tn_nr}.png`, './output/reddit_comment.png');
 
     // // Generate speech (Using Google Cloud Text-to-Speech API)
     // const request = {
@@ -125,19 +130,22 @@ async function generateVideo() {
             .outputOptions("-vf ass=./generated/subtitles.ass:fontsdir=./fonts/")
             .save(`generated/${videoTitle}.mp4`)
             .on('end', () => {
-                console.log('Video has been created.');
-                ffmpeg('./generated/run.mp4')
-                .input('./reddit_comment.png')
-                .complexFilter([
-                    `[0:v][1:v] overlay=x=0:y=0:enable='between(t,0,${thumbnailDuration})'`
-                ])
-                .save('output.mp4')
-                .on('end', () => {
-                    console.log('Processing finished!');
-                    splitVideoIntoParts('./output.mp4');
-                }).on('error', (err) => {
-                    console.error('Error:', err);
-                });
+                setTimeout(() => {
+                    console.log('Video has been created.');
+                    ffmpeg('./generated/run.mp4')
+                    .input('./output/reddit_comment.png')
+                    .complexFilter([
+                        `[0:v][1:v] overlay=x=0:y=0:enable='between(t,0,${thumbnailDuration})'`
+                    ])
+                    .save('./output/output.mp4')
+                    .on('end', () => {
+                        console.log('Processing finished!');
+                        splitVideoIntoParts(audio_length.format.duration, './output/output.mp4');
+                        // authorize().then((auth) => uploadVideo(auth, 'TestTitle', 'Test is this', 'test')).catch((error) => console.log(error));
+                    }).on('error', (err) => {
+                        console.error('Error:', err);
+                    });
+                }, 5000);
             });
     }, 10000);
 }

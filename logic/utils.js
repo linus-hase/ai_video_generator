@@ -6,18 +6,8 @@ const readline = require('readline');
 
 // helpers
 
-function getVideoDuration(videoPath, callback) {
-    ffmpeg.ffprobe(videoPath, (err, metadata) => {
-        if (err) {
-            callback(err, null);
-        } else {
-            const duration = metadata.format.duration;
-            callback(null, duration);
-        }
-    });
-}
-
 function calculateSegments(duration) {
+    console.log(duration);
     const segmentLength = 60;
     const fullSegments = Math.floor(duration / segmentLength);
     const lastSegmentLength = duration % segmentLength;
@@ -29,7 +19,7 @@ function splitVideo(videoPath, fullSegments, lastSegmentLength) {
         ffmpeg(videoPath)
             .setStartTime(i * 60)
             .setDuration(60)
-            .output(`output_part_${i + 1}.mp4`)
+            .output(`./final/output_part_${i + 1}.mp4`)
             .on('end', () => {
                 console.log(`Segment ${i + 1} finished!`);
             })
@@ -43,7 +33,7 @@ function splitVideo(videoPath, fullSegments, lastSegmentLength) {
         ffmpeg(videoPath)
             .setStartTime(fullSegments * 60)
             .setDuration(lastSegmentLength)
-            .output(`output_part_${fullSegments + 1}.mp4`)
+            .output(`./final/output_part_${fullSegments + 1}.mp4`)
             .on('end', () => {
                 console.log(`Last segment finished!`);
             })
@@ -56,16 +46,10 @@ function splitVideo(videoPath, fullSegments, lastSegmentLength) {
 
 // usage
 
-function splitVideoIntoParts(videoPath) {
-    getVideoDuration(videoPath, (err, duration) => {
-        if (err) {
-            console.error('Error:', err);
-            return;
-        }
-    
-        const { fullSegments, lastSegmentLength } = calculateSegments(duration);
-        splitVideo(videoPath, fullSegments, lastSegmentLength);
-    });
+function splitVideoIntoParts(totalLength, videoPath) {
+    const { fullSegments, lastSegmentLength } = calculateSegments(totalLength);
+    console.log(fullSegments + ' ' + lastSegmentLength);
+    splitVideo(videoPath, fullSegments, lastSegmentLength);
 }
 
 function deleteLines(filePath, searchWord) {
@@ -87,7 +71,22 @@ function deleteLines(filePath, searchWord) {
     console.log('File updated successfully');
 }
 
+function createTitle(title) {
+    return title + " #shorts #fy #storytime";
+}
+
+function createDescription(description) {
+    return description + " #shorts #fy #storytime\nAlso follow us on TikTok: https://www.tiktok.com/@forumfables";
+}
+
+function createTags() {
+    return "reddit #short,askreddit #short,reddit stories,askreddit stories,askreddit posts,reddit story,askreddit stories #shorts,reddit stories #shorts,askreddit sus,reddit sus,viral reddit post,reddit post,askreddit comments,askreddit suspicious,reddit suspicious,reddit delight,reddit cheating stories,viral reddit,askreddit confession,askreddit,reddit confession,reddit.delight,raskreddit,shorts,reddit,stories,story,house of stories,crazy story,recipes";
+}
+
 module.exports = {
     splitVideoIntoParts,
-    deleteLines
+    deleteLines,
+    createTitle,
+    createDescription,
+    createTags
 }
